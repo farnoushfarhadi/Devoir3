@@ -1,0 +1,138 @@
+---
+title: "Exercise 03"
+author: "Farnoush Farhadi"
+date: "`r Sys.Date()`"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Vignette Title}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+## Answer B-1 (Project Topic): 
+Timothée and I have decided to form a team. For our project, we would like to implement a facial emotion recognition social application based on facial pictures. This app would work as follows on the user's side  :
+
+- The customer takes a picture of her face expressing a specific emotion
+- Our software automatically detects the emotion expressed
+- The user is asked to confirm the detected emotion
+- The user chooses who she wants to share her emotion with amongst her friends 
+- The user sends the picture of herself
+- Her friends receive the labelled picture and can reply with another picture.
+
+We found the following page listing a lot of facial recognition oriented databases :
+[http://www.face-rec.org/databases/](http://www.face-rec.org/databases/)
+
+Amongst them, one stood out for us : the [Extended Cohn-Kanade Dataset](http://www.pitt.edu/~emotion/ck-spread.htm). 
+[(Database direct link)](http://www.consortium.ri.cmu.edu/ckagree/).
+
+There is at leat [one associated paper](http://www.pitt.edu/~jeffcohn/CVPR2010_CK+2.pdf).
+See page 4 and after for the methodology used.
+
+The software would probably be divided into two main parts :
+
+- Detection of meaningfull "emotion-points" on the picture and computing of there relative distance (normalized to remove size effects)
+  + Method : SVM probably
+  + Test method : do tests on previously cited database (Cohn-Kanade)
+- Emotion classification based on the relative distance of the different "emotion-points"
+  + Method : K-nearest neighbors ?
+  + Test method : on previously cited database (Cohn-Kanade)
+
+All operations will probably be made on grayscale version of the picture, maybe compressed for perfommance issues.
+Notice that both parts of the software can be independently tested and developped, which is a great advantage.
+Moreover in case we lack the time to finish the whole project, we can at least finish one or two independent parts which are still usefull on their own.
+
+The face database used for classification will most likely be stored on a remote server which will also do at least the intensive computing part and maybe the communication (sending and receiving pictures) too. On the long term this application could enable smartphone companies to monitor their customer's mood based on images of their camera (with their agreement of course). This way, they can adjust the behaviour of their software depending on how their client is feeling. Another way this application could be usefull would be for autist people who have a hard time reading the emotions of people on their face. This could help them interact better with people around them.
+
+## Answer B-2:
+
+The first step is to load the packages ggplot2, dplyr, tidyr, maps, ggmap and scales. Then, we filter only the longitude and the latitude of the crimes occured in 2015, capture the map from google and generate the scatterplot as follows:
+
+```{r}
+remove(list=ls())
+if (Sys.getenv("JAVA_HOME")!="")
+  Sys.setenv(JAVA_HOME="")
+library(rJava)
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+library(maps)
+library(ggmap)
+library(scales)
+library(MASS)
+library(rgl)
+#ch <- read.table("C:/Users/User/Desktop/MTH6312/ch.txt", sep = "\t", header = T)
+ch <- read.table("https://dl.dropboxusercontent.com/s/c5c6un2m1fv0a37/ch.txt?dl=0", sep = "\t", header = T)
+## Selecting only crimes of year 2015:
+ch$Year[ch$Year != 2015] <- NA
+ch <- na.omit(ch)
+## Removing empty locations and splitting Location into Latitude and Longitude:
+ch$Location[ch$Location == ''] <- NA
+ch <- na.omit(ch)
+ch <- ch %>% extract(Location, c('Latitude', 'Longitude'), '\\(([^,]+), ([^)]+)\\)')
+ch$Longitude <- round(as.numeric(ch$Longitude), 2)
+ch$Latitude <- round(as.numeric(ch$Latitude), 2)
+lon <- ch$Longitude
+lat <- ch$Latitude
+mymap = get_map(location = c(mean(lon), mean(lat)),source = "google",zoom=11)
+```
+
+Next, we extract the frequency of crimes happend in each geographical coordinates of chicago, create the heatmap plot and indicate the crimes by colour red in a 2D pichture saved as a png file format in a determined address:
+
+```{r, fig.show='hold'}
+## Get crime locations:
+locationCrimes <- as.data.frame(table(ch$Longitude, ch$Latitude))
+names(locationCrimes) <- c('long', 'lat', 'Frequency')
+locationCrimes$long <- as.numeric(as.character(locationCrimes$long))
+locationCrimes$lat <- as.numeric(as.character(locationCrimes$lat))
+locationCrimes <- subset(locationCrimes, Frequency > 0)
+
+## 2D Plotting the location heatmap
+png(filename = "C:/Users/User/Desktop/MTH6312/Chicagomap.png", width = 800, height = 600, units = "px")
+ggmap(mymap) + geom_tile(data = locationCrimes, aes(x = long, y = lat, alpha = Frequency), fill = "red") + theme(axis.title.y = element_blank(), axis.title.x = element_blank())
+dev.off()
+```
+<p align="center">
+  <img src="https://dl.dropboxusercontent.com/s/vzj39zjp3rzdaj7/Chicagomap.png?dl=0"/>
+</p>
+## Answer B-3:
+Here, the univariate density of 2015 crimes over latitude and longitude are given by the following codes:
+
+```{r, fig.show='hold'}
+plot(density(lat),main = "Univariate Density of Lat.")
+plot(density(lon),main = "Univariate Density of Lon.")
+```
+
+## Answer B-4:
+Finally, the 3D plot is generated using the following code:
+
+```{r, fig.show='hold'}
+## 3D Plotting the location heatmap:
+z = kde2d(lon, lat, n = 50)
+persp(z, xlab = "Longitude", ylab = "Latitude", zlab = "Density", phi = 45, shade = 0.35)
+```
+
+All in all, for overlaying the 3D density on the google map directly using the rgl package we have:
+
+```{r, fig.show='hold'}
+mymap2 = as.matrix(mymap)
+nx = dim(mymap2)[2]
+ny = dim(mymap2)[1]
+xmin = min(lon) 
+xmax = max(lon) 
+ymin = min(lat)
+ymax = max(lat)
+xc = seq(xmin, xmax, len = ny)
+yc = seq(ymin, ymax, len = nx)
+colours = matrix(mymap2, ny, nx)
+m = matrix(0, ny, nx)
+surface3d(xc, yc, m, col = colours)
+#density
+z = kde2d(lon, lat, n = 50)
+z$z = z$z/100
+surface3d(z$x,z$y,z$z, col = colours)
+```
+<p align="center">
+  <img src="https://dl.dropboxusercontent.com/s/o7v6j7rn82xwvbv/3d1.png?dl=0"/>
+</p>
+<p align="center">
+  <img src="https://dl.dropboxusercontent.com/s/4nkde351rxpe2wy/3d2.png?dl=0"/>
+</p>
